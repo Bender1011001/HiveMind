@@ -1,0 +1,37 @@
+
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "7860:7860"
+    volumes:
+      - ./data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - MONGODB_URI=mongodb://mongodb:27017
+      - RABBITMQ_HOST=rabbitmq
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+    depends_on:
+      - mongodb
+      - rabbitmq
+
+  mongodb:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+volumes:
+  mongodb_data:
+  rabbitmq_data:
