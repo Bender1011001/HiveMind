@@ -1,3 +1,6 @@
-from .mongo_store import MongoMemoryStore
+"""Memory module for shared context and persistent storage."""
 
-__all__ = ['MongoMemoryStore']
+from .mongo_store import MongoMemoryStore
+from .context_manager import SharedContext
+
+__all__ = ['MongoMemoryStore', 'SharedContext']

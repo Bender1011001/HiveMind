@@ -1,5 +1,5 @@
-"""Settings package for HiveMind system."""
+"""Settings module for system configuration."""
 
-from .config import Settings, settings
+from .settings import Settings, settings
 
 __all__ = ['Settings', 'settings']
