@@ -1,7 +1,7 @@
 from typing import List, Dict, Optional
 from .capability import Capability, AgentCapability, CapabilityRegister
 from .role_manager import Task, RoleManager
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 
 logger = logging.getLogger(__name__)

@@ -26,6 +26,7 @@ class MessageBroker:
         
         # Set up credentials
         self.credentials = pika.PlainCredentials(username, password)
+        logger.info(f"Initializing RabbitMQ connection to {host}:{port}")
         
         self.connection = None
         self.channel = None
@@ -35,18 +36,23 @@ class MessageBroker:
         """Establish connection to RabbitMQ with retry mechanism."""
         for attempt in range(self.connection_attempts):
             try:
+                logger.info(f"Attempting to connect to RabbitMQ (attempt {attempt + 1}/{self.connection_attempts})")
                 parameters = pika.ConnectionParameters(
                     host=self.host,
                     port=self.port,
                     virtual_host=self.virtual_host,
                     credentials=self.credentials,
-                    heartbeat=self.heartbeat
+                    heartbeat=self.heartbeat,
+                    connection_attempts=3,
+                    retry_delay=2,
+                    socket_timeout=5
                 )
                 
                 self.connection = pika.BlockingConnection(parameters)
                 self.channel = self.connection.channel()
                 
                 # Declare exchange for inter-agent communication
+                logger.info("Declaring RabbitMQ exchange")
                 self.channel.exchange_declare(
                     exchange='agent_communication',
                     exchange_type='topic',
@@ -57,21 +63,26 @@ class MessageBroker:
                 return
                 
             except AMQPConnectionError as e:
-                logger.error(f"Connection attempt {attempt + 1} failed: {e}")
+                logger.error(f"Connection attempt {attempt + 1} failed: {str(e)}")
                 if attempt < self.connection_attempts - 1:
-                    time.sleep(2 ** attempt)  # Exponential backoff
+                    delay = 2 ** attempt
+                    logger.info(f"Waiting {delay} seconds before next attempt")
+                    time.sleep(delay)  # Exponential backoff
                 else:
-                    raise ConnectionError("Failed to connect to RabbitMQ after multiple attempts")
+                    logger.error("Failed all connection attempts")
+                    raise ConnectionError(f"Failed to connect to RabbitMQ after {self.connection_attempts} attempts: {str(e)}")
                     
     def _ensure_connection(self) -> None:
         """Ensure connection is active, reconnect if necessary."""
         try:
             if not self.connection or self.connection.is_closed:
+                logger.info("Connection closed, attempting to reconnect")
                 self._connect()
             if not self.channel or self.channel.is_closed:
+                logger.info("Channel closed, creating new channel")
                 self.channel = self.connection.channel()
         except Exception as e:
-            logger.error(f"Failed to ensure connection: {e}")
+            logger.error(f"Failed to ensure connection: {str(e)}")
             raise
             
     def send_message(self, message: Message) -> bool:
@@ -89,6 +100,7 @@ class MessageBroker:
                 timestamp=int(time.time())
             )
             
+            logger.info(f"Sending message to {message.receiver_id}")
             self.channel.basic_publish(
                 exchange='agent_communication',
                 routing_key=routing_key,
@@ -100,11 +112,14 @@ class MessageBroker:
             return True
             
         except (AMQPConnectionError, AMQPChannelError) as e:
-            logger.error(f"RabbitMQ error while sending message: {e}")
-            self._connect()  # Try to reconnect
+            logger.error(f"RabbitMQ error while sending message: {str(e)}")
+            try:
+                self._connect()  # Try to reconnect
+            except Exception as reconnect_error:
+                logger.error(f"Failed to reconnect: {str(reconnect_error)}")
             return False
         except Exception as e:
-            logger.error(f"Error sending message: {e}")
+            logger.error(f"Error sending message: {str(e)}")
             return False
             
     def subscribe(self, agent_id: str, callback: Callable[[Message], None]):
@@ -119,6 +134,7 @@ class MessageBroker:
             queue_name = f"agent_{agent_id}_queue"
             
             # Declare queue for the agent
+            logger.info(f"Declaring queue for agent {agent_id}")
             self.channel.queue_declare(
                 queue=queue_name,
                 durable=True,
@@ -130,6 +146,7 @@ class MessageBroker:
             
             # Bind queue to exchange with agent-specific routing key
             routing_key = f"agent.{agent_id}"
+            logger.info(f"Binding queue to exchange with routing key {routing_key}")
             self.channel.queue_bind(
                 exchange='agent_communication',
                 queue=queue_name,
@@ -141,13 +158,14 @@ class MessageBroker:
                 try:
                     message_dict = json.loads(body)
                     message = Message.from_dict(message_dict)
+                    logger.info(f"Received message for agent {agent_id}")
                     callback(message)
                     ch.basic_ack(delivery_tag=method.delivery_tag)
                 except json.JSONDecodeError as e:
-                    logger.error(f"Failed to decode message: {e}")
+                    logger.error(f"Failed to decode message: {str(e)}")
                     ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
                 except Exception as e:
-                    logger.error(f"Error processing message: {e}")
+                    logger.error(f"Error processing message: {str(e)}")
                     ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
             
             # Set up consumer with QoS
@@ -160,7 +178,7 @@ class MessageBroker:
             logger.info(f"Successfully subscribed to messages for agent {agent_id}")
             
         except Exception as e:
-            logger.error(f"Error setting up subscription: {e}")
+            logger.error(f"Error setting up subscription: {str(e)}")
             raise
             
     def start_consuming(self):
@@ -171,22 +189,25 @@ class MessageBroker:
                 logger.info("Starting to consume messages")
                 self.channel.start_consuming()
             except (AMQPConnectionError, AMQPChannelError) as e:
-                logger.error(f"Connection error while consuming: {e}")
+                logger.error(f"Connection error while consuming: {str(e)}")
+                logger.info("Waiting 5 seconds before reconnecting")
                 time.sleep(5)  # Wait before reconnecting
             except Exception as e:
-                logger.error(f"Unexpected error while consuming: {e}")
+                logger.error(f"Unexpected error while consuming: {str(e)}")
                 break
                 
     def close(self):
         """Clean up resources."""
         try:
             if self.channel and not self.channel.is_closed:
+                logger.info("Closing RabbitMQ channel")
                 self.channel.close()
             if self.connection and not self.connection.is_closed:
+                logger.info("Closing RabbitMQ connection")
                 self.connection.close()
             logger.info("Successfully closed RabbitMQ connection")
         except Exception as e:
-            logger.error(f"Error closing connection: {e}")
+            logger.error(f"Error closing connection: {str(e)}")
             
     def __enter__(self):
         """Context manager entry."""

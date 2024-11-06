@@ -1,7 +1,12 @@
 from typing import Dict, List, Optional
 from pymongo import MongoClient, DESCENDING
-from pymongo.errors import ConnectionFailure, OperationFailure
+from pymongo.errors import ConnectionFailure, OperationFailure, ServerSelectionTimeoutError
 from datetime import datetime
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class MongoMemoryStore:
     """Centralized memory store using MongoDB for multi-agent collaboration."""
@@ -9,18 +14,32 @@ class MongoMemoryStore:
     def __init__(self, connection_string: str = "mongodb://localhost:27017/"):
         """Initialize MongoDB connection and set up indexes."""
         try:
-            self.client = MongoClient(connection_string)
+            logger.info(f"Attempting to connect to MongoDB at {connection_string}")
+            self.client = MongoClient(
+                connection_string,
+                serverSelectionTimeoutMS=5000,  # Increased timeout
+                connectTimeoutMS=5000,
+                socketTimeoutMS=5000
+            )
             # Test the connection
+            logger.info("Testing MongoDB connection...")
             self.client.admin.command('ping')
+            logger.info("MongoDB ping successful")
             
             self.db = self.client.langchain_multi_agent
             self.memory_collection = self.db.shared_memory
             self.context_collection = self.db.context
             
             # Create indexes for better query performance
+            logger.info("Setting up MongoDB indexes...")
             self._setup_indexes()
-        except ConnectionFailure as e:
-            raise ConnectionError(f"Failed to connect to MongoDB: {e}")
+            self.is_connected = True
+            logger.info("Successfully connected to MongoDB")
+        except (ConnectionFailure, ServerSelectionTimeoutError) as e:
+            self.is_connected = False
+            logger.error(f"Failed to connect to MongoDB: {str(e)}")
+            logger.error(f"Connection details: {connection_string}")
+            raise ConnectionError(f"Failed to connect to MongoDB: {str(e)}")
             
     def _setup_indexes(self):
         """Set up necessary indexes for better query performance."""
@@ -33,8 +52,11 @@ class MongoMemoryStore:
             # Indexes for context_collection
             self.context_collection.create_index([("task_id", DESCENDING)], unique=True)
             self.context_collection.create_index([("last_updated", DESCENDING)])
+            logger.info("Successfully created MongoDB indexes")
         except OperationFailure as e:
-            raise RuntimeError(f"Failed to create indexes: {e}")
+            self.is_connected = False
+            logger.error(f"Failed to create indexes: {str(e)}")
+            raise RuntimeError(f"Failed to create indexes: {str(e)}")
             
     def _validate_store_params(self, agent_id: str, memory_type: str, content: Dict):
         """Validate parameters for store_memory method."""
@@ -47,6 +69,8 @@ class MongoMemoryStore:
             
     def store_memory(self, agent_id: str, memory_type: str, content: Dict) -> str:
         """Store a memory entry."""
+        if not self.is_connected:
+            raise ConnectionError("Not connected to MongoDB")
         try:
             self._validate_store_params(agent_id, memory_type, content)
             
@@ -60,13 +84,16 @@ class MongoMemoryStore:
             result = self.memory_collection.insert_one(document)
             return str(result.inserted_id)
         except Exception as e:
-            raise RuntimeError(f"Failed to store memory: {e}")
+            logger.error(f"Failed to store memory: {str(e)}")
+            raise RuntimeError(f"Failed to store memory: {str(e)}")
         
     def retrieve_memories(self, 
                         agent_id: Optional[str] = None, 
                         memory_type: Optional[str] = None, 
                         limit: int = 10) -> List[Dict]:
         """Retrieve memories based on filters."""
+        if not self.is_connected:
+            raise ConnectionError("Not connected to MongoDB")
         try:
             if limit < 1:
                 raise ValueError("limit must be a positive integer")
@@ -95,10 +122,13 @@ class MongoMemoryStore:
             
             return memories
         except Exception as e:
-            raise RuntimeError(f"Failed to retrieve memories: {e}")
+            logger.error(f"Failed to retrieve memories: {str(e)}")
+            raise RuntimeError(f"Failed to retrieve memories: {str(e)}")
         
     def store_context(self, task_id: str, context: Dict) -> str:
         """Store shared context for a task."""
+        if not self.is_connected:
+            raise ConnectionError("Not connected to MongoDB")
         try:
             if not isinstance(task_id, str) or not task_id.strip():
                 raise ValueError("task_id must be a non-empty string")
@@ -114,10 +144,13 @@ class MongoMemoryStore:
             result = self.context_collection.insert_one(document)
             return str(result.inserted_id)
         except Exception as e:
-            raise RuntimeError(f"Failed to store context: {e}")
+            logger.error(f"Failed to store context: {str(e)}")
+            raise RuntimeError(f"Failed to store context: {str(e)}")
         
     def update_context(self, task_id: str, context_update: Dict) -> bool:
         """Update existing context for a task."""
+        if not self.is_connected:
+            raise ConnectionError("Not connected to MongoDB")
         try:
             if not isinstance(task_id, str) or not task_id.strip():
                 raise ValueError("task_id must be a non-empty string")
@@ -135,10 +168,13 @@ class MongoMemoryStore:
             )
             return result.modified_count > 0
         except Exception as e:
-            raise RuntimeError(f"Failed to update context: {e}")
+            logger.error(f"Failed to update context: {str(e)}")
+            raise RuntimeError(f"Failed to update context: {str(e)}")
         
     def get_context(self, task_id: str) -> Optional[Dict]:
         """Retrieve context for a specific task."""
+        if not self.is_connected:
+            raise ConnectionError("Not connected to MongoDB")
         try:
             if not isinstance(task_id, str) or not task_id.strip():
                 raise ValueError("task_id must be a non-empty string")
@@ -149,12 +185,15 @@ class MongoMemoryStore:
             )
             return result["context"] if result else None
         except Exception as e:
-            raise RuntimeError(f"Failed to retrieve context: {e}")
+            logger.error(f"Failed to retrieve context: {str(e)}")
+            raise RuntimeError(f"Failed to retrieve context: {str(e)}")
             
     def close(self):
         """Close the MongoDB connection."""
         if hasattr(self, 'client'):
             self.client.close()
+            self.is_connected = False
+            logger.info("MongoDB connection closed")
             
     def __enter__(self):
         """Context manager entry."""

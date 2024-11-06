@@ -4,6 +4,10 @@ import os
 import json
 from dataclasses import dataclass, asdict
 from typing import Optional, List
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 @dataclass
 class ModelConfig:
@@ -19,28 +23,28 @@ class Settings:
     """System configuration settings."""
     
     # Model settings
-    model_name: str = "anthropic/claude-3-opus"
-    api_key: Optional[str] = None
-    temperature: float = 0.7
-    max_tokens: int = 2048
+    model_name: str = os.getenv("MODEL_NAME", "anthropic/claude-3-opus")
+    api_key: Optional[str] = os.getenv("OPENROUTER_API_KEY")
+    temperature: float = float(os.getenv("TEMPERATURE", "0.7"))
+    max_tokens: int = int(os.getenv("MAX_TOKENS", "2048"))
     
     # Available models configuration
     available_models: List[ModelConfig] = None
     
     # MongoDB settings
-    mongodb_uri: str = "mongodb://localhost:27017/"
+    mongodb_uri: str = os.getenv("MONGODB_URI", "mongodb://localhost:27017/")
     
     # RabbitMQ settings
-    rabbitmq_host: str = "localhost"
-    rabbitmq_port: int = 5672
-    rabbitmq_user: str = "guest"
-    rabbitmq_password: str = "guest"
+    rabbitmq_host: str = os.getenv("RABBITMQ_HOST", "localhost")
+    rabbitmq_port: int = int(os.getenv("RABBITMQ_PORT", "5672"))
+    rabbitmq_user: str = os.getenv("RABBITMQ_USER", "guest")
+    rabbitmq_password: str = os.getenv("RABBITMQ_PASSWORD", "guest")
     
     # Directory settings
     base_dir: str = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    shared_data_dir: str = os.path.join(base_dir, "workspace", "data")
-    shared_code_dir: str = os.path.join(base_dir, "workspace", "code")
-    shared_output_dir: str = os.path.join(base_dir, "workspace", "output")
+    shared_data_dir: str = os.path.join(base_dir, os.getenv("SHARED_DATA_DIR", "workspace/data"))
+    shared_code_dir: str = os.path.join(base_dir, os.getenv("SHARED_CODE_DIR", "workspace/code"))
+    shared_output_dir: str = os.path.join(base_dir, os.getenv("SHARED_OUTPUT_DIR", "workspace/output"))
     
     def __post_init__(self):
         """Create necessary directories after initialization."""
