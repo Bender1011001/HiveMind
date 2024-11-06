@@ -1,11 +1,10 @@
-"""
-Main entry point for the LangChain Multi-Agent System.
-"""
+"""Main entry point for the LangChain Multi-Agent System."""
 
 import streamlit as st
 from typing import Dict, List
 from datetime import datetime, timedelta
 import logging
+import os
 
 # Update imports to use absolute paths
 from src.memory.mongo_store import MongoMemoryStore
@@ -13,10 +12,11 @@ from src.communication.broker import MessageBroker
 from src.communication.message import Message, MessageType
 from src.roles.capability import Capability, AgentCapability, CapabilityRegister
 from src.roles.role_manager import Task, RoleManager
+from src.roles.master_agent import MasterAgent
 from src.execution.code_executor import CodeExecutor
 from src.settings import Settings, settings
+from src.communication.openrouter_client import OpenRouterClient
 
-# Rest of the file remains unchanged...
 logger = logging.getLogger(__name__)
 
 class SimpleMode:
@@ -25,24 +25,42 @@ class SimpleMode:
     def __init__(self, parent_ui):
         """Initialize simple mode with reference to parent UI."""
         self.parent = parent_ui
+        self.master_agent = MasterAgent(self.parent.role_manager, self.parent.capability_register)
         
     def render(self):
         """Render the simple mode interface."""
-        st.title("LangChain Multi-Agent System")
+        st.title("HiveMind AI Assistant")
         
         # Simple description
         st.markdown("""
-        Enter your request below and the system will automatically:
-        - Select the most appropriate agent(s)
-        - Configure necessary settings
-        - Execute your task efficiently
+        Welcome to HiveMind! Just tell me what you need help with, and I'll:
+        - Analyze your request
+        - Select the most appropriate AI agents
+        - Get your task done efficiently
         """)
+
+        # Model selection input
+        model_name = st.text_input(
+            "Model Name",
+            value=os.getenv("MODEL_NAME", "anthropic/claude-3-opus"),
+            help="Enter the model name (e.g., anthropic/claude-3-opus, openai/gpt-4-turbo)",
+            key="model_name_simple"
+        )
         
         # Large input field for user request
         user_request = st.text_area(
             "What would you like help with?",
             placeholder="Enter your request, question, or task...",
             height=150
+        )
+        
+        # Priority selector
+        priority = st.select_slider(
+            "Task Priority",
+            options=[1, 2, 3, 4, 5],
+            value=3,
+            format_func=lambda x: {1: "Low", 2: "Medium-Low", 3: "Medium", 4: "Medium-High", 5: "High"}[x],
+            help="Select the priority level for your request"
         )
         
         # Submit button
@@ -52,47 +70,30 @@ class SimpleMode:
                 return
                 
             try:
-                # Create task with automatic configuration
-                task_id = f"task_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+                # Update model name in settings
+                settings.model_name = model_name
                 
-                # Analyze request to determine required capabilities
-                # For now, we'll assign all capabilities with medium priority
-                required_capabilities = [cap for cap in Capability]
-                
-                task = Task(
-                    task_id=task_id,
-                    required_capabilities=required_capabilities,
-                    priority=3,
-                    deadline=datetime.utcnow() + timedelta(hours=24)
-                )
-                
-                # Auto-assign to best available agent
-                assigned_agent = self.parent.role_manager.assign_task(task)
-                
-                if assigned_agent:
-                    st.success("✅ Request submitted successfully")
-                    st.info(f"Assigned to agent: {assigned_agent}")
+                with st.spinner("Analyzing your request..."):
+                    # Process request through master agent
+                    assigned_agent = self.master_agent.process_request(user_request, priority)
                     
-                    # Create system message for the request
-                    message = Message(
-                        sender_id="system",
-                        receiver_id=assigned_agent,
-                        message_type=MessageType.TASK,
-                        content={"text": user_request},
-                        task_id=task_id
-                    )
-                    
-                    self.parent.message_broker.send_message(message)
-                    st.session_state.messages.append(message)
-                    st.session_state.tasks.append(task)
-                else:
-                    st.error("❌ No suitable agent available. Please try again later.")
+                    if assigned_agent:
+                        st.success("✅ Request submitted successfully")
+                        st.info(f"Your request is being handled by {assigned_agent}")
+                        
+                        # Show detected capabilities
+                        capabilities = self.master_agent.analyze_request(user_request)
+                        st.write("Detected needs:")
+                        for cap in capabilities:
+                            st.write(f"• {cap.value.replace('_', ' ').title()}")
+                    else:
+                        st.error("❌ No suitable agent available. Please try again later.")
                     
             except Exception as e:
                 st.error(f"Error processing request: {e}")
         
         # Show active requests if any exist
-        active_tasks = [task for task in st.session_state.tasks 
+        active_tasks = [task for task in st.session_state.tasks
                        if (task.deadline - datetime.utcnow()).total_seconds() > 0]
         
         if active_tasks:
@@ -101,9 +102,12 @@ class SimpleMode:
             
             for task in active_tasks:
                 with st.expander(f"📋 Request {task.task_id}"):
+                    # Get task status from master agent
+                    status = self.master_agent.get_task_status(task.task_id)
+                    
                     # Find associated message
                     task_message = next(
-                        (msg for msg in st.session_state.messages 
+                        (msg for msg in st.session_state.messages
                          if msg.task_id == task.task_id),
                         None
                     )
@@ -111,9 +115,9 @@ class SimpleMode:
                     if task_message:
                         st.write("Request:", task_message.content.get('text', 'N/A'))
                     
-                    assigned_agent = self.parent.role_manager.get_task_agent(task.task_id)
-                    if assigned_agent:
-                        st.write("Assigned to:", assigned_agent)
+                    st.write("Status:", status['status'].title())
+                    if status.get('assigned_agent'):
+                        st.write("Assigned to:", status['assigned_agent'])
                     
                     hours_left = (task.deadline - datetime.utcnow()).total_seconds() / 3600
                     if hours_left > 0:
@@ -165,6 +169,15 @@ class MultiAgentUI:
             )
             st.session_state.interface_mode = mode.lower()
             
+            # Model selection input in sidebar
+            model_name = st.text_input(
+                "Model Name",
+                value=os.getenv("MODEL_NAME", "anthropic/claude-3-opus"),
+                help="Enter the model name (e.g., anthropic/claude-3-opus, openai/gpt-4-turbo)",
+                key="model_name_advanced"
+            )
+            settings.model_name = model_name
+            
             st.markdown("---")
             
             # System status (shown in both modes)
@@ -179,11 +192,11 @@ class MultiAgentUI:
     
     def _render_advanced_mode(self):
         """Render the advanced mode interface."""
-        st.title("LangChain Multi-Agent System")
+        st.title("HiveMind Advanced Mode")
         
         # Welcome message for first-time users
         if st.session_state.show_welcome:
-            with st.expander("👋 Welcome! Click here to get started", expanded=True):
+            with st.expander("👋 Welcome to Advanced Mode! Click here to get started", expanded=True):
                 st.markdown("""
                 ### Quick Start Guide
                 1. First, go to **Agent Management** to register agents with specific capabilities
