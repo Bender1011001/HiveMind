@@ -7,74 +7,115 @@ import subprocess
 import sys
 import time
 import logging
+import shutil
 from typing import Tuple
 
 # Set up logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(message)s'  # Simplified format for better readability
+)
 logger = logging.getLogger(__name__)
 
-def check_service_status(service_name: str) -> bool:
-    """Check if a Windows service is running."""
+def is_mongodb_installed() -> bool:
+    """Check if MongoDB is installed."""
+    return shutil.which('mongod') is not None
+
+def is_rabbitmq_installed() -> bool:
+    """Check if RabbitMQ is installed."""
+    return shutil.which('rabbitmqctl') is not None
+
+def check_mongodb_running() -> bool:
+    """Check if MongoDB is running."""
     try:
-        output = subprocess.check_output(['net', 'start'], text=True)
-        return service_name in output
-    except subprocess.CalledProcessError:
+        import pymongo
+        client = pymongo.MongoClient("mongodb://localhost:27017/", serverSelectionTimeoutMS=2000)
+        client.server_info()
+        return True
+    except Exception:
         return False
 
-def start_service(service_name: str) -> Tuple[bool, str]:
-    """Start a Windows service."""
+def check_rabbitmq_running() -> bool:
+    """Check if RabbitMQ is running."""
     try:
-        subprocess.check_output(['net', 'start', service_name], text=True)
-        return True, f"Successfully started {service_name}"
-    except subprocess.CalledProcessError as e:
-        return False, f"Failed to start {service_name}: {str(e)}"
+        result = subprocess.run(['rabbitmqctl', 'status'], 
+                              capture_output=True, 
+                              text=True, 
+                              timeout=5)
+        return result.returncode == 0
+    except Exception:
+        return False
 
-def ensure_service(service_name: str) -> bool:
-    """Ensure a service is running, start it if it's not."""
-    logger.info(f"Checking {service_name} status...")
+def check_service(service_name: str) -> bool:
+    """Check if a service is installed and running."""
+    logger.info(f"\nChecking {service_name}...")
     
-    if check_service_status(service_name):
-        logger.info(f"{service_name} is already running")
-        return True
+    # Check installation
+    if service_name == "MongoDB":
+        installed = is_mongodb_installed()
+        if not installed:
+            logger.error(f"{service_name} is not installed.")
+            logger.info("Please install MongoDB from: https://www.mongodb.com/try/download/community")
+            return False
+        
+        running = check_mongodb_running()
+        if not running:
+            logger.error(f"{service_name} is installed but not running.")
+            logger.info("Start MongoDB using one of these methods:")
+            logger.info("1. Start MongoDB service if installed as a service")
+            logger.info("2. Run 'mongod' from command line")
+            return False
+            
+    elif service_name == "RabbitMQ":
+        installed = is_rabbitmq_installed()
+        if not installed:
+            logger.error(f"{service_name} is not installed.")
+            logger.info("Please install RabbitMQ from: https://www.rabbitmq.com/download.html")
+            return False
+            
+        running = check_rabbitmq_running()
+        if not running:
+            logger.error(f"{service_name} is installed but not running.")
+            logger.info("Start RabbitMQ using one of these methods:")
+            logger.info("1. Start RabbitMQ service if installed as a service")
+            logger.info("2. Run 'rabbitmq-server' from command line")
+            return False
     
-    logger.info(f"{service_name} is not running. Attempting to start...")
-    success, message = start_service(service_name)
-    logger.info(message)
-    
-    if success:
-        # Give the service some time to fully start
-        time.sleep(5)
-        return True
-    return False
+    logger.info(f"{service_name} is installed and running properly.")
+    return True
 
 def main():
     """Main launcher function."""
+    logger.info("HiveMind Launcher")
+    logger.info("=================")
+    
     # Required services
     services = [
         "MongoDB",
         "RabbitMQ"
     ]
     
-    # Check and start services
+    # Check services
     all_services_running = True
     for service in services:
-        if not ensure_service(service):
+        if not check_service(service):
             all_services_running = False
-            logger.error(f"Failed to ensure {service} is running")
     
     if not all_services_running:
-        logger.error("Failed to start all required services. Please start them manually.")
+        logger.error("\nCannot start HiveMind: Required services are not ready.")
+        logger.info("Please fix the issues mentioned above and try again.")
         sys.exit(1)
     
     # All services are running, start the main application
-    logger.info("All required services are running. Starting the application...")
+    logger.info("\nAll required services are running.")
+    logger.info("Starting HiveMind application...")
     
     try:
         subprocess.run([sys.executable, "-m", "streamlit", "run", "run.py"])
     except KeyboardInterrupt:
-        logger.info("Application stopped by user")
+        logger.info("\nApplication stopped by user")
     except Exception as e:
-        logger.error(f"Error running the application: {e}")
+        logger.error(f"\nError running the application: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":

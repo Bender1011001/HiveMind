@@ -1,12 +1,6 @@
-"""
-Main entry point for the LangChain Multi-Agent System.
-"""
+import sys
+import streamlit.web.cli as stcli
 
-import streamlit as st
-from src.ui.app import main
-
-if __name__ == "__main__":
-    try:
-        main()
-    except Exception as e:
-        st.error(f"Application error: {e}")
+if __name__ == '__main__':
+    sys.argv = ["streamlit", "run", "src/ui/app.py", "--server.port=8501", "--server.address=localhost"]
+    sys.exit(stcli.main())
