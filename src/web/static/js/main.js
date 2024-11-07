@@ -4,11 +4,19 @@ import { MessageType, createMessage, MessageHistory } from './messages.js';
 // Initialize state
 const state = {
     autoScroll: true,
-    darkMode: localStorage.getItem('darkMode') !== 'false',
+    darkMode: initializeDarkMode(),
     showThoughts: true,
     connected: true,
     messageHistory: new MessageHistory()
 };
+
+// Function to initialize dark mode
+function initializeDarkMode() {
+    if (localStorage.getItem('darkMode') === null) {
+        localStorage.setItem('darkMode', 'false');
+    }
+    return localStorage.getItem('darkMode') === 'true';
+}
 
 // DOM Elements
 let chatHistory;
