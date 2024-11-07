@@ -4,7 +4,7 @@ import streamlit as st
 from datetime import datetime, timedelta
 import pandas as pd
 from typing import Dict, List, Any
-from ..utils.event_bus import EventBus
+from src.utils.event_bus import EventBus
 
 class APIMonitor:
     """Component for monitoring and visualizing API calls."""

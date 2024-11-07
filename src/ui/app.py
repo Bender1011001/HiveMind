@@ -29,6 +29,7 @@ from src.ui.components.agent_management import AgentManagement
 from src.ui.components.communication import Communication
 from src.ui.components.code_execution import CodeExecution
 from src.ui.components.system_status import SystemStatus
+from src.ui.components.agent_activity import AgentActivity
 
 # Initialize logger for this module
 logger = get_logger('ui')
@@ -81,6 +82,7 @@ class MultiAgentUI:
             self.communication = Communication(self)
             self.code_execution = CodeExecution(self)
             self.system_status = SystemStatus(self)
+            self.agent_activity = AgentActivity(self.event_bus)
             
             # Initialize session state
             if 'messages' not in st.session_state:
@@ -91,6 +93,8 @@ class MultiAgentUI:
                 st.session_state.show_welcome = True
             if 'interface_mode' not in st.session_state:
                 st.session_state.interface_mode = 'simple'
+            if 'active_tab' not in st.session_state:
+                st.session_state.active_tab = 'task_management'
                 
         except Exception as e:
             st.error(f"Error initializing system: {e}")
@@ -150,32 +154,48 @@ class MultiAgentUI:
                 3. Use **Communication** to see messages between agents
                 4. **Code Execution** lets you run Python or JavaScript code
                 5. **API Monitor** shows all API interactions and their status
+                6. **Agent Activity** provides detailed monitoring of each agent's processes
                 
                 Click the ❌ in the top right to close this guide.
                 """)
                 if st.button("Don't show this again"):
                     st.session_state.show_welcome = False
                     st.rerun()
-        
-        # Main tabs
-        tab1, tab2, tab3, tab4, tab5 = st.tabs([
-            "Task Management",
-            "Agent Management",
-            "Communication",
-            "Code Execution",
-            "API Monitor"
-        ])
-        
-        with tab1:
-            self.task_management.render()
-        with tab2:
-            self.agent_management.render()
-        with tab3:
-            self.communication.render()
-        with tab4:
-            self.code_execution.render()
-        with tab5:
-            self.api_monitor.render()
+
+        # Create two columns for the tab sections
+        col1, col2 = st.columns(2)
+
+        # Core Functions in left column
+        with col1:
+            st.markdown("### Core Functions")
+            tab_core1, tab_core2, tab_core3 = st.tabs([
+                "Task Management",
+                "Agent Management",
+                "Communication"
+            ])
+            
+            with tab_core1:
+                self.task_management.render()
+            with tab_core2:
+                self.agent_management.render()
+            with tab_core3:
+                self.communication.render()
+
+        # Monitoring & Execution in right column
+        with col2:
+            st.markdown("### Monitoring & Execution")
+            tab_mon1, tab_mon2, tab_mon3 = st.tabs([
+                "Code Execution",
+                "API Monitor",
+                "Agent Activity"
+            ])
+            
+            with tab_mon1:
+                self.code_execution.render()
+            with tab_mon2:
+                self.api_monitor.render()
+            with tab_mon3:
+                self.agent_activity.render()
                 
     def cleanup(self):
         """Clean up resources."""
