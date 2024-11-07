@@ -13,10 +13,13 @@ export function createMessage(type, content, metadata = {}) {
     const messageContainer = document.createElement('div');
     messageContainer.className = `message message-${type}`;
 
-    // Add timestamp
-    const timestamp = document.createElement('div');
-    timestamp.className = 'message-timestamp';
-    timestamp.textContent = new Date().toLocaleTimeString();
+    // Add timestamp if provided
+    if (metadata.timestamp) {
+        const timestamp = document.createElement('div');
+        timestamp.className = 'message-timestamp';
+        timestamp.textContent = new Date(metadata.timestamp).toLocaleTimeString();
+        messageContainer.appendChild(timestamp);
+    }
 
     // Create content wrapper
     const contentWrapper = document.createElement('div');
@@ -45,7 +48,6 @@ export function createMessage(type, content, metadata = {}) {
     }
 
     messageContainer.appendChild(contentWrapper);
-    messageContainer.appendChild(timestamp);
 
     return messageContainer;
 }
@@ -53,7 +55,7 @@ export function createMessage(type, content, metadata = {}) {
 function createUserMessage(content) {
     const message = document.createElement('div');
     message.className = 'message-content user-content';
-    message.textContent = content;
+    message.innerHTML = formatContent(content);
     return message;
 }
 
@@ -84,21 +86,21 @@ function createAIMessage(content, metadata) {
 function createSystemMessage(content) {
     const message = document.createElement('div');
     message.className = 'message-content system-content';
-    message.innerHTML = `<i class="system-icon">ℹ️</i> ${content}`;
+    message.innerHTML = `<i class="system-icon">ℹ️</i> ${formatContent(content)}`;
     return message;
 }
 
 function createErrorMessage(content) {
     const message = document.createElement('div');
     message.className = 'message-content error-content';
-    message.innerHTML = `<i class="error-icon">❌</i> ${content}`;
+    message.innerHTML = `<i class="error-icon">❌</i> ${formatContent(content)}`;
     return message;
 }
 
 function createWarningMessage(content) {
     const message = document.createElement('div');
     message.className = 'message-content warning-content';
-    message.innerHTML = `<i class="warning-icon">⚠️</i> ${content}`;
+    message.innerHTML = `<i class="warning-icon">⚠️</i> ${formatContent(content)}`;
     return message;
 }
 
@@ -134,16 +136,26 @@ function formatContent(content) {
 }
 
 function formatThoughts(thoughts) {
+    if (typeof thoughts === 'string') {
+        return `<div class="thought-item">${thoughts}</div>`;
+    }
+
     return `
-        <div class="thought-item">
-            <strong>Reasoning:</strong> ${thoughts.reasoning || ''}
-        </div>
-        <div class="thought-item">
-            <strong>Plan:</strong> ${thoughts.plan || ''}
-        </div>
-        <div class="thought-item">
-            <strong>Criticism:</strong> ${thoughts.criticism || ''}
-        </div>
+        ${thoughts.reasoning ? `
+            <div class="thought-item">
+                <strong>Reasoning:</strong> ${thoughts.reasoning}
+            </div>
+        ` : ''}
+        ${thoughts.plan ? `
+            <div class="thought-item">
+                <strong>Plan:</strong> ${thoughts.plan}
+            </div>
+        ` : ''}
+        ${thoughts.criticism ? `
+            <div class="thought-item">
+                <strong>Criticism:</strong> ${thoughts.criticism}
+            </div>
+        ` : ''}
     `;
 }
 
@@ -194,6 +206,11 @@ export class MessageHistory {
     clear() {
         this.messages = [];
         this.saveToLocalStorage();
+    }
+
+    getLastMessageTime() {
+        if (this.messages.length === 0) return new Date(0);
+        return new Date(this.messages[this.messages.length - 1].timestamp);
     }
 
     loadFromLocalStorage() {

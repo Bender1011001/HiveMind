@@ -79,6 +79,33 @@ body {
     transition: grid-template-columns var(--transition-normal);
 }
 
+/* Logo Container */
+#logo-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--spacing-md);
+    background-color: var(--color-message-bg);
+    border-bottom: 1px solid var(--color-secondary);
+}
+
+.logo-image {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    object-fit: cover;
+    transition: filter var(--transition-normal);
+}
+
+.light-mode .logo-image {
+    filter: brightness(0.9);
+}
+
+#time-date {
+    text-align: right;
+    font-size: var(--font-size-sm);
+}
+
 /* Panels */
 .panel {
     height: 100vh;
@@ -199,27 +226,118 @@ pre code {
     transform: scale(0.95);
 }
 
-/* Status Indicators */
-.status-indicator {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--spacing-xs);
-    font-size: var(--font-size-sm);
+/* Config Section */
+.config-section {
+    margin-bottom: var(--spacing-lg);
 }
 
-.status-indicator::before {
+.config-section h3 {
+    color: var(--color-primary);
+    margin-bottom: var(--spacing-sm);
+}
+
+.config-button {
+    padding: var(--spacing-sm) var(--spacing-md);
+    border: none;
+    border-radius: 6px;
+    background-color: var(--color-secondary);
+    color: var(--color-text);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: var(--font-size-sm);
+    transition: background-color var(--transition-fast);
+    margin-right: var(--spacing-sm);
+    margin-bottom: var(--spacing-sm);
+}
+
+.config-button:hover {
+    background-color: var(--color-accent);
+}
+
+/* Switch Toggle */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 48px;
+    height: 24px;
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--color-secondary);
+    transition: var(--transition-normal);
+    border-radius: 24px;
+}
+
+.slider:before {
+    position: absolute;
     content: "";
-    width: 8px;
-    height: 8px;
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: var(--color-background);
+    transition: var(--transition-normal);
     border-radius: 50%;
 }
 
-.status-connected::before {
-    background-color: var(--color-success);
+input:checked+.slider {
+    background-color: var(--color-primary);
 }
 
-.status-disconnected::before {
-    background-color: var(--color-error);
+input:checked+.slider:before {
+    transform: translateX(24px);
+}
+
+/* Config List */
+.config-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.config-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--spacing-sm) 0;
+    border-bottom: 1px solid var(--color-secondary);
+}
+
+/* Status Indicators */
+.connected {
+    color: var(--color-success);
+}
+
+.disconnected {
+    color: var(--color-error);
+}
+
+/* Progress Bar */
+#progress-bar-box {
+    padding: var(--spacing-sm) var(--spacing-md);
+    background-color: var(--color-message-bg);
+    border-top: 1px solid var(--color-secondary);
+}
+
+#progress-bar-h {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    color: var(--color-text);
+    font-size: var(--font-size-sm);
 }
 
 /* Animations */
@@ -263,6 +381,7 @@ pre code {
         bottom: 0;
         z-index: 100;
         transform: translateX(-100%);
+        width: 280px;
     }
 
     #left-panel.visible {
@@ -271,6 +390,15 @@ pre code {
 
     .message {
         max-width: 95%;
+    }
+
+    #logo-container {
+        padding: var(--spacing-sm);
+    }
+
+    .logo-image {
+        width: 40px;
+        height: 40px;
     }
 }
 

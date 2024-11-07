@@ -65,7 +65,8 @@
         <div id="right-panel" class="panel">
             <!-- Logo and Time -->
             <div id="logo-container">
-                <img src="{{ url_for('static', filename='images/logo.png') }}" alt="HiveMind Logo">
+                <img src="{{ url_for('static', filename='images/lost%20dog.jpg') }}" alt="HiveMind Logo"
+                    class="logo-image">
                 <div id="time-date"></div>
             </div>
 
@@ -90,7 +91,7 @@
             <!-- Input Section -->
             <div id="input-section" x-data="{ paused: false }">
                 <textarea id="chat-input" placeholder="Type your message here..." rows="1"></textarea>
-                <button class="chat-button" id="send-button" aria-label="Send message">
+                <button class="chat-button" id="send-button" onclick="window.sendMessage()" aria-label="Send message">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
                         <path d="M25 20 L75 50 L25 80" fill="none" stroke="currentColor" stroke-width="15" />
                     </svg>
@@ -112,6 +113,12 @@
     </div>
 
     <!-- JavaScript -->
+    <script type="module">
+        import { MessageType, createMessage, MessageHistory } from './static/js/messages.js';
+        window.MessageType = MessageType;
+        window.createMessage = createMessage;
+        window.MessageHistory = MessageHistory;
+    </script>
     <script type="module" src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 

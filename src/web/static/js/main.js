@@ -1,32 +1,46 @@
-// Import highlight.js for code syntax highlighting
-import hljs from 'https://cdn.skypack.dev/highlight.js';
+// Import message handling functions
+import { MessageType, createMessage, MessageHistory } from './messages.js';
 
-// State management
-let autoScroll = true;
-let darkMode = localStorage.getItem('darkMode') !== 'false';
-let showThoughts = true;
-let connected = true;
-let messageHistory = [];
+// Initialize state
+const state = {
+    autoScroll: true,
+    darkMode: localStorage.getItem('darkMode') !== 'false',
+    showThoughts: true,
+    connected: true,
+    messageHistory: new MessageHistory()
+};
 
 // DOM Elements
-const chatHistory = document.getElementById('chat-history');
-const chatInput = document.getElementById('chat-input');
-const sendButton = document.getElementById('send-button');
-const progressBar = document.getElementById('progress-bar');
-const timeDate = document.getElementById('time-date');
+let chatHistory;
+let chatInput;
+let sendButton;
+let progressBar;
+let timeDate;
 
 // Initialize the UI
 document.addEventListener('DOMContentLoaded', () => {
+    // Get DOM elements
+    chatHistory = document.getElementById('chat-history');
+    chatInput = document.getElementById('chat-input');
+    sendButton = document.getElementById('send-button');
+    progressBar = document.getElementById('progress-bar');
+    timeDate = document.getElementById('time-date');
+
+    // Initialize
     initializeEventListeners();
     updateDateTime();
     checkSystemStatus();
     loadMessageHistory();
     setInterval(updateDateTime, 1000);
     setInterval(checkSystemStatus, 5000);
+
+    console.log('UI initialized');
 });
 
 // Event Listeners
 function initializeEventListeners() {
+    console.log('Initializing event listeners');
+
     // Send message on Enter (but allow Shift+Enter for new lines)
     chatInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
@@ -36,7 +50,10 @@ function initializeEventListeners() {
     });
 
     // Send message on button click
-    sendButton.addEventListener('click', sendMessage);
+    sendButton.addEventListener('click', () => {
+        console.log('Send button clicked');
+        sendMessage();
+    });
 
     // Auto-resize input field
     chatInput.addEventListener('input', () => {
@@ -47,8 +64,8 @@ function initializeEventListeners() {
     // Handle chat history scrolling
     chatHistory.addEventListener('scroll', () => {
         const isAtBottom = chatHistory.scrollHeight - chatHistory.scrollTop <= chatHistory.clientHeight + 100;
-        if (autoScroll !== isAtBottom) {
-            autoScroll = isAtBottom;
+        if (state.autoScroll !== isAtBottom) {
+            state.autoScroll = isAtBottom;
             document.querySelector('#auto-scroll-switch').checked = isAtBottom;
         }
     });
@@ -62,28 +79,19 @@ function initializeEventListeners() {
         }
     });
 
-    // Copy code blocks with button
-    document.addEventListener('click', (e) => {
-        if (e.target.classList.contains('copy-code-button')) {
-            const codeBlock = e.target.nextElementSibling;
-            copyToClipboard(codeBlock.textContent);
-            e.target.textContent = 'Copied!';
-            setTimeout(() => {
-                e.target.textContent = 'Copy';
-            }, 2000);
-        }
-    });
+    console.log('Event listeners initialized');
 }
 
 // Message Handling
 async function sendMessage() {
+    console.log('Sending message');
     const message = chatInput.value.trim();
     if (!message) return;
 
     try {
         // Add user message to chat
         appendMessage({
-            type: 'user',
+            type: MessageType.USER,
             content: message,
             timestamp: new Date()
         });
@@ -101,80 +109,71 @@ async function sendMessage() {
             body: JSON.stringify({ content: message })
         });
 
-        if (!response.ok) throw new Error('Failed to send message');
+        if (!response.ok) {
+            throw new Error('Failed to send message');
+        }
 
-        // Start polling for AI response
-        startResponsePolling();
+        const data = await response.json();
+        console.log('Message sent:', data);
+
+        if (data.success) {
+            // Start polling for AI response
+            pollForResponse();
+        } else {
+            showToast('Error sending message', 'error');
+        }
 
     } catch (error) {
         showToast(error.message, 'error');
+        console.error('Error sending message:', error);
     }
 }
 
 function appendMessage(message) {
-    const messageElement = createMessageElement(message);
-    chatHistory.appendChild(messageElement);
-    messageHistory.push(message);
-    saveMessageHistory();
+    console.log('Appending message:', message);
+    const messageElement = createMessage(message.type, message.content, {
+        thoughts: message.thoughts,
+        timestamp: message.timestamp
+    });
 
-    if (autoScroll) {
+    chatHistory.appendChild(messageElement);
+    state.messageHistory.add(message);
+
+    if (state.autoScroll) {
         scrollToBottom();
     }
-
-    // Highlight code blocks
-    messageElement.querySelectorAll('pre code').forEach((block) => {
-        hljs.highlightElement(block);
-    });
 }
 
-function createMessageElement(message) {
-    const div = document.createElement('div');
-    div.className = `message message-${message.type}`;
+async function pollForResponse() {
+    try {
+        const response = await fetch('/api/messages');
+        const messages = await response.json();
 
-    // Format timestamp
-    const time = new Date(message.timestamp).toLocaleTimeString();
+        // Find new messages
+        const lastMessageTime = state.messageHistory.getLastMessageTime();
+        const newMessages = messages.filter(msg => new Date(msg.timestamp) > lastMessageTime);
 
-    // Create message content
-    const content = document.createElement('div');
-    content.className = 'message-content';
+        // Add new messages to chat
+        newMessages.forEach(msg => appendMessage(msg));
 
-    // Handle code blocks
-    const formattedContent = formatMessageContent(message.content);
-    content.innerHTML = formattedContent;
-
-    // Add timestamp
-    const timestamp = document.createElement('div');
-    timestamp.className = 'message-timestamp';
-    timestamp.textContent = time;
-
-    div.appendChild(content);
-    div.appendChild(timestamp);
-
-    return div;
-}
-
-function formatMessageContent(content) {
-    // Replace code blocks with syntax highlighted versions
-    return content.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, language, code) => {
-        const highlightedCode = hljs.highlight(code.trim(), {
-            language: language || 'plaintext'
-        }).value;
-
-        return `
-            <div class="code-block">
-                <button class="copy-code-button">Copy</button>
-                <pre><code class="hljs ${language || ''}">${highlightedCode}</code></pre>
-            </div>
-        `;
-    });
+        // Continue polling if we're still waiting for a response
+        if (messages[messages.length - 1]?.type !== MessageType.AI) {
+            setTimeout(pollForResponse, 1000);
+        }
+    } catch (error) {
+        console.error('Error polling for response:', error);
+        showToast('Error receiving response', 'error');
+    }
 }
 
 // Utility Functions
 async function copyToClipboard(text) {
     try {
         await navigator.clipboard.writeText(text);
+        showToast('Copied to clipboard!', 'success');
     } catch (err) {
         console.error('Failed to copy text:', err);
+        showToast('Failed to copy text', 'error');
     }
 }
 
@@ -188,7 +187,13 @@ function showToast(message, type = 'info') {
     toast.querySelector('.toast__message').textContent = message;
     toast.style.display = 'flex';
 
-    setTimeout(() => {
+    // Clear any existing timeout
+    if (toast.timeoutId) {
+        clearTimeout(toast.timeoutId);
+    }
+
+    // Auto-hide after 3 seconds
+    toast.timeoutId = setTimeout(() => {
         toast.style.display = 'none';
     }, 3000);
 }
@@ -209,58 +214,44 @@ async function checkSystemStatus() {
         const response = await fetch('/api/status');
         const status = await response.json();
 
-        if (status.mongodb_connected && status.rabbitmq_connected) {
-            if (!connected) {
-                showToast('System connected', 'success');
-                connected = true;
-            }
-        } else {
-            if (connected) {
-                showToast('System disconnected', 'error');
-                connected = false;
-            }
+        const newConnected = status.mongodb_connected && status.rabbitmq_connected;
+        if (newConnected !== state.connected) {
+            state.connected = newConnected;
+            showToast(
+                state.connected ? 'System connected' : 'System disconnected',
+                state.connected ? 'success' : 'error'
+            );
+
+            // Update UI to reflect status
+            document.documentElement.dataset.connected = state.connected;
+            Alpine.store('chat').connected = state.connected;
         }
-
-        // Update UI to reflect status
-        document.documentElement.dataset.connected = connected;
-
     } catch (error) {
-        if (connected) {
+        if (state.connected) {
+            state.connected = false;
             showToast('Connection lost', 'error');
-            connected = false;
+            document.documentElement.dataset.connected = false;
+            Alpine.store('chat').connected = false;
         }
     }
 }
 
-// Message History Persistence
-function saveMessageHistory() {
-    localStorage.setItem('messageHistory', JSON.stringify(
-        messageHistory.slice(-100) // Keep last 100 messages
-    ));
-}
-
+// Message History Management
 function loadMessageHistory() {
-    try {
-        const saved = localStorage.getItem('messageHistory');
-        if (saved) {
-            const messages = JSON.parse(saved);
-            messages.forEach(message => appendMessage(message));
-        }
-    } catch (error) {
-        console.error('Failed to load message history:', error);
-    }
+    const messages = state.messageHistory.messages;
+    messages.forEach(message => appendMessage(message));
 }
 
 // Theme Management
 window.toggleDarkMode = function (isDark) {
-    darkMode = isDark;
+    state.darkMode = isDark;
     localStorage.setItem('darkMode', isDark);
     document.body.classList.toggle('light-mode', !isDark);
 };
 
 // Autoscroll Management
 window.toggleAutoScroll = function (enabled) {
-    autoScroll = enabled;
+    state.autoScroll = enabled;
     if (enabled) {
         scrollToBottom();
     }
@@ -268,20 +259,40 @@ window.toggleAutoScroll = function (enabled) {
 
 // Thoughts Display Management
 window.toggleThoughts = function (show) {
-    showThoughts = show;
+    state.showThoughts = show;
     document.documentElement.dataset.showThoughts = show;
 };
 
-// Export functions for use in HTML
-window.sendMessage = sendMessage;
+// Chat Management
 window.resetChat = async function () {
     chatHistory.innerHTML = '';
-    messageHistory = [];
-    saveMessageHistory();
+    state.messageHistory.clear();
     showToast('Chat reset', 'success');
 };
 
 window.newChat = async function () {
     await resetChat();
     showToast('New chat started', 'success');
+};
+
+// Agent Control
+window.pauseAgent = async function (paused) {
+    try {
+        const response = await fetch('/api/pause', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ paused })
+        });
+
+        if (response.ok) {
+            Alpine.store('chat').paused = paused;
+            showToast(paused ? 'Agent paused' : 'Agent resumed', 'success');
+        } else {
+            throw new Error('Failed to update agent state');
+        }
+    } catch (error) {
+        showToast(error.message, 'error');
+    }
 };
