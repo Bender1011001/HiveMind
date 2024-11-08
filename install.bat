@@ -63,5 +63,12 @@ echo Next steps:
 echo 1. Ensure MongoDB is running
 echo 2. Ensure RabbitMQ is running
 echo 3. Update your API key in .env file
-echo 4. Run 'python launcher.py' to start the application
+echo 4. Run this script with 'launch' parameter to start the web interface
 echo.
+
+:: Check if launch parameter was provided
+if "%1"=="launch" (
+    echo Starting HiveMind Web Interface...
+    python launch_web.py
+    pause
+)
