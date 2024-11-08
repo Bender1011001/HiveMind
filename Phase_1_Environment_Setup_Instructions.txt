@@ -1,0 +1,178 @@
+
+Phase 1: Environment and Dependency Setup
+
+Agent Role: Environment and Dependency Configuration Specialist
+
+Primary Objectives:
+1. Standardize project dependencies to prevent version conflicts and ensure consistency across development environments.
+2. Configure environment settings for secure and efficient access to services.
+3. Set up development infrastructure to support scalable and organized development.
+
+Tasks and Instructions
+
+Task A: Requirements Consolidation
+Goal: Organize and centralize dependency management.
+
+1. Create a consolidated `requirements.txt` file:
+   - Action: Merge dependencies into a single `requirements.txt` to avoid duplications and ensure all necessary packages are in one place.
+   - Requirements List:
+      flask==2.0.0
+      flask-socketio==5.1.1
+      python-socketio==5.4.0
+      eventlet==0.33.0
+      python-dotenv==0.19.0
+      pymongo==4.0.0
+      pika==1.2.0
+      requests==2.26.0
+      python-dateutil==2.8.2
+      watchdog==2.1.6
+      openai==1.0.0
+      autopep8==2.0.0
+      pylint==2.17.0
+      flake8==6.0.0
+      pytest==7.3.1
+
+   - Verification: Confirm all modules load correctly by running `pip install -r requirements.txt` after creating the file.
+   - Improvement: This will reduce overhead in managing multiple requirements files.
+
+2. Remove redundant requirements files:
+   - Action: Remove the following files after merging dependencies:
+      - src/communication/requirements.txt
+      - src/execution/requirements.txt
+      - src/memory/requirements.txt
+      - src/ui/requirements.txt
+   - Verification: Run `git status` to verify only the consolidated file remains.
+
+Task B: Environment Configuration
+Goal: Establish a secure and flexible environment configuration structure.
+
+1. Enhance `settings.py` initialization:
+   - Action: Add validation in `__post_init__()` in `src/settings/settings.py` to ensure critical environment variables are set.
+   - Code:
+      def __post_init__(self):
+          """Enhanced initialization with validation."""
+          self._validate_environment()
+          self._setup_directories()
+          self._initialize_logging()
+          self._load_model_configs()
+
+      def _validate_environment(self):
+          """Validate critical environment variables."""
+          required_vars = [
+              'OPENROUTER_API_KEY',
+              'MONGODB_URI',
+              'RABBITMQ_HOST'
+          ]
+          for var in required_vars:
+              if not os.getenv(var):
+                  print(f"Warning: {var} not set. Some features may be limited.")
+   - Purpose: This validation ensures that key environment variables are present, preventing unexpected errors at runtime.
+
+2. Create an `.env.example` template:
+   - Action: Set up a `.env.example` file to document environment variable requirements.
+   - Content:
+      OPENROUTER_API_KEY=your_key_here
+      MONGODB_URI=mongodb://localhost:27017/
+      RABBITMQ_HOST=localhost
+      RABBITMQ_PORT=5672
+      RABBITMQ_USER=guest
+      RABBITMQ_PASSWORD=guest
+      MODEL_NAME=anthropic/claude-3-opus
+      TEMPERATURE=0.7
+      MAX_TOKENS=2048
+   - Purpose: This will serve as a reference for developers, clarifying which environment variables are necessary and their expected format.
+
+Task C: Docker Configuration
+Goal: Provide a reliable and portable deployment environment using Docker.
+
+1. Update `Dockerfile` to include a build and runtime stage:
+   - Action: Optimize the Dockerfile with multi-stage builds to minimize image size and improve efficiency.
+   - Dockerfile:
+      # Build stage
+      FROM python:3.9-slim as builder
+      WORKDIR /app
+      COPY requirements.txt .
+      RUN pip install --user -r requirements.txt
+
+      # Runtime stage
+      FROM python:3.9-slim
+      WORKDIR /app
+      COPY --from=builder /root/.local /root/.local
+      COPY . .
+      ENV PATH=/root/.local/bin:$PATH
+      CMD ["python", "run.py"]
+   - Purpose: This Dockerfile setup creates a lightweight runtime image while preserving necessary dependencies.
+
+2. Update `docker-compose.yml` to integrate services and volumes:
+   - Action: Use `docker-compose.yml` to define and manage the services, including MongoDB and RabbitMQ.
+   - File:
+      version: '3.8'
+      services:
+        hivemind:
+          build: .
+          ports:
+            - "5000:5000"
+          environment:
+            - MONGODB_URI=mongodb://mongo:27017/
+            - RABBITMQ_HOST=rabbitmq
+          depends_on:
+            - mongo
+            - rabbitmq
+
+        mongo:
+          image: mongo:latest
+          ports:
+            - "27017:27017"
+          volumes:
+            - mongodb_data:/data/db
+
+        rabbitmq:
+          image: rabbitmq:management
+          ports:
+            - "5672:5672"
+            - "15672:15672"
+          volumes:
+            - rabbitmq_data:/var/lib/rabbitmq
+
+      volumes:
+        mongodb_data:
+        rabbitmq_data:
+   - Purpose: Configuring services in `docker-compose.yml` simplifies local development by encapsulating dependencies in Docker, making the environment easy to reproduce.
+
+Task D: Script Standardization
+Goal: Standardize environment setup across developers.
+
+1. Create a unified setup script (`setup.py`):
+   - Action: Implement a `setup.py` script to automate environment setup, directory creation, and dependency installation.
+   - Script:
+      import os
+      import subprocess
+      import shutil
+
+      def setup_environment():
+          """Setup development environment."""
+          # Create necessary directories
+          directories = ['logs', 'workspace/data', 'workspace/code', 'workspace/output']
+          for directory in directories:
+              os.makedirs(directory, exist_ok=True)
+
+          # Install dependencies
+          subprocess.run(['pip', 'install', '-r', 'requirements.txt'])
+
+          # Setup configuration
+          if not os.path.exists('.env'):
+              shutil.copy('.env.example', '.env')
+              print("Created .env file. Please update with your settings.")
+
+      if __name__ == '__main__':
+          setup_environment()
+   - Purpose: Running this script will ensure that all necessary directories, dependencies, and configurations are set up, reducing setup friction for new developers.
+
+Verification Checklist
+- [ ] Requirements Installed: Run `pip install -r requirements.txt` to confirm installation.
+- [ ] Environment Variables Set: Validate environment variables using the `.env.example` template.
+- [ ] Docker Setup Validated: Use `docker-compose up` to verify the containerized environment.
+- [ ] Setup Script Executed: Run `python setup.py` to ensure all directories are created and dependencies are installed.
+
+Summary for the Agent
+In Phase 1, your objective is to create a standardized, documented, and automated setup environment. This will involve consolidating requirements, validating environment variables, configuring Docker for service dependencies, and creating a setup script for smooth onboarding.

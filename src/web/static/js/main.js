@@ -1,5 +1,5 @@
 // Import message handling functions
-import { MessageType, createMessage, MessageHistory } from './messages.js';
+import { MessageType, MessageStatus, MessageHandler, createMessage } from './messages.js';
 
 // Initialize state
 const state = {
@@ -7,7 +7,7 @@ const state = {
     darkMode: initializeDarkMode(),
     showThoughts: true,
     connected: true,
-    messageHistory: new MessageHistory()
+    messageHandler: null
 };
 
 // Function to initialize dark mode
@@ -25,6 +25,9 @@ let sendButton;
 let progressBar;
 let timeDate;
 
+// Get base URL for API
+const baseUrl = window.location.origin;
+
 // Initialize the UI
 document.addEventListener('DOMContentLoaded', () => {
     // Get DOM elements
@@ -34,6 +37,14 @@ document.addEventListener('DOMContentLoaded', () => {
     progressBar = document.getElementById('progress-bar');
     timeDate = document.getElementById('time-date');
 
+    // Initialize message handler with full URL
+    state.messageHandler = new MessageHandler(`${baseUrl}/api`, {
+        maxRetries: 3,
+        retryDelay: 2000,
+        messageTimeout: 30000,
+        reconnectDelay: 5000
+    });
+
     // Initialize
     initializeEventListeners();
     updateDateTime();
@@ -42,12 +53,33 @@ document.addEventListener('DOMContentLoaded', () => {
     setInterval(updateDateTime, 1000);
     setInterval(checkSystemStatus, 5000);
 
-    console.log('UI initialized');
+    console.log('UI initialized with base URL:', baseUrl);
 });
 
 // Event Listeners
 function initializeEventListeners() {
     console.log('Initializing event listeners');
+
+    // Message handler events
+    window.addEventListener('message_handler_message', (event) => {
+        appendMessage(event.detail);
+    });
+
+    window.addEventListener('message_handler_message_status', (event) => {
+        updateMessageStatus(event.detail.messageId, event.detail.status);
+    });
+
+    window.addEventListener('message_handler_connection_status', (event) => {
+        handleConnectionStatus(event.detail.status);
+    });
+
+    window.addEventListener('message_handler_message_error', (event) => {
+        handleMessageError(event.detail);
+    });
+
+    window.addEventListener('message_handler_message_timeout', (event) => {
+        handleMessageTimeout(event.detail);
+    });
 
     // Send message on Enter (but allow Shift+Enter for new lines)
     chatInput.addEventListener('keydown', (e) => {
@@ -72,10 +104,8 @@ function initializeEventListeners() {
     // Handle chat history scrolling
     chatHistory.addEventListener('scroll', () => {
         const isAtBottom = chatHistory.scrollHeight - chatHistory.scrollTop <= chatHistory.clientHeight + 100;
-        if (state.autoScroll !== isAtBottom) {
-            state.autoScroll = isAtBottom;
-            document.querySelector('#auto-scroll-switch').checked = isAtBottom;
-        }
+        state.autoScroll = isAtBottom;
+        document.querySelector('#auto-scroll-switch').checked = isAtBottom;
     });
 
     // Copy message content on click
@@ -87,53 +117,41 @@ function initializeEventListeners() {
         }
     });
 
+    // Handle toast close button
+    document.querySelector('.toast__close').addEventListener('click', () => {
+        document.getElementById('toast').style.display = 'none';
+    });
+
     console.log('Event listeners initialized');
 }
 
 // Message Handling
 async function sendMessage() {
     console.log('Sending message');
-    const message = chatInput.value.trim();
-    if (!message) return;
+    const content = chatInput.value.trim();
+    if (!content) return;
 
     try {
-        // Add user message to chat
-        appendMessage({
-            type: MessageType.USER,
-            content: message,
-            timestamp: new Date()
-        });
+        if (!state.connected) {
+            showToast('Cannot send message: System is disconnected', 'error');
+            return;
+        }
+
+        // Disable input while sending
+        setInputState(false);
+
+        // Send message through handler
+        const messageId = await state.messageHandler.sendMessage(content);
 
         // Clear input and reset height
         chatInput.value = '';
         chatInput.style.height = 'auto';
 
-        // Send to backend
-        const response = await fetch('/api/send_message', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ content: message })
-        });
-
-        if (!response.ok) {
-            throw new Error('Failed to send message');
-        }
-
-        const data = await response.json();
-        console.log('Message sent:', data);
-
-        if (data.success) {
-            // Start polling for AI response
-            pollForResponse();
-        } else {
-            showToast('Error sending message', 'error');
-        }
-
     } catch (error) {
-        showToast(error.message, 'error');
+        showToast('Failed to send message: ' + error.message, 'error');
         console.error('Error sending message:', error);
+    } finally {
+        setInputState(true);
     }
 }
 
@@ -141,36 +159,86 @@ function appendMessage(message) {
     console.log('Appending message:', message);
     const messageElement = createMessage(message.type, message.content, {
         thoughts: message.thoughts,
-        timestamp: message.timestamp
+        timestamp: message.timestamp,
+        status: message.status
     });
 
+    // Store message ID in element for status updates
+    if (message.id) {
+        messageElement.dataset.messageId = message.id;
+    }
+
     chatHistory.appendChild(messageElement);
-    state.messageHistory.add(message);
 
     if (state.autoScroll) {
         scrollToBottom();
     }
 }
 
-async function pollForResponse() {
-    try {
-        const response = await fetch('/api/messages');
-        const messages = await response.json();
+function updateMessageStatus(messageId, status) {
+    const messageElement = chatHistory.querySelector(`[data-message-id="${messageId}"]`);
+    if (messageElement) {
+        messageElement.dataset.status = status;
 
-        // Find new messages
-        const lastMessageTime = state.messageHistory.getLastMessageTime();
-        const newMessages = messages.filter(msg => new Date(msg.timestamp) > lastMessageTime);
+        // Update status indicator
+        const indicator = messageElement.querySelector('.message-status-indicator');
+        if (indicator) {
+            indicator.className = `message-status-indicator status-${status}`;
 
-        // Add new messages to chat
-        newMessages.forEach(msg => appendMessage(msg));
-
-        // Continue polling if we're still waiting for a response
-        if (messages[messages.length - 1]?.type !== MessageType.AI) {
-            setTimeout(pollForResponse, 1000);
+            // Show error icon for failed status
+            if (status === MessageStatus.FAILED) {
+                indicator.innerHTML = '❌';
+            }
         }
-    } catch (error) {
-        console.error('Error polling for response:', error);
-        showToast('Error receiving response', 'error');
+    }
+}
+
+function handleConnectionStatus(status) {
+    const connected = status === 'connected';
+    if (connected !== state.connected) {
+        state.connected = connected;
+        showToast(
+            connected ? 'Connected to server' : 'Connection lost',
+            connected ? 'success' : 'error'
+        );
+        document.documentElement.dataset.connected = connected;
+        Alpine.store('chat').connected = connected;
+
+        // Update UI elements
+        setInputState(connected);
+        updateProgressBar(connected ? 'Connected' : 'Disconnected');
+    }
+}
+
+function handleMessageError(error) {
+    showToast(`Error: ${error.error}`, 'error');
+    updateProgressBar('Error: ' + error.error);
+}
+
+function handleMessageTimeout(detail) {
+    showToast(`Message ${detail.messageId} timed out`, 'error');
+    updateProgressBar('Message timed out');
+}
+
+// UI State Management
+function setInputState(enabled) {
+    chatInput.disabled = !enabled;
+    sendButton.disabled = !enabled;
+    sendButton.classList.toggle('loading', !enabled);
+}
+
+function updateProgressBar(text) {
+    if (progressBar) {
+        progressBar.textContent = text;
+    }
+}
+
+// Message History Management
+function loadMessageHistory() {
+    const messages = state.messageHandler.messageHistory.messages;
+    messages.forEach(message => appendMessage(message));
+    if (state.autoScroll) {
+        scrollToBottom();
     }
 }
 
@@ -219,7 +287,7 @@ function updateDateTime() {
 
 async function checkSystemStatus() {
     try {
-        const response = await fetch('/api/status');
+        const response = await fetch(`${baseUrl}/api/status`);
         const status = await response.json();
 
         const newConnected = status.mongodb_connected && status.rabbitmq_connected;
@@ -242,12 +310,6 @@ async function checkSystemStatus() {
             Alpine.store('chat').connected = false;
         }
     }
-}
-
-// Message History Management
-function loadMessageHistory() {
-    const messages = state.messageHistory.messages;
-    messages.forEach(message => appendMessage(message));
 }
 
 // Theme Management
@@ -274,7 +336,7 @@ window.toggleThoughts = function (show) {
 // Chat Management
 window.resetChat = async function () {
     chatHistory.innerHTML = '';
-    state.messageHistory.clear();
+    state.messageHandler.messageHistory.clear();
     showToast('Chat reset', 'success');
 };
 
@@ -286,7 +348,7 @@ window.newChat = async function () {
 // Agent Control
 window.pauseAgent = async function (paused) {
     try {
-        const response = await fetch('/api/pause', {
+        const response = await fetch(`${baseUrl}/api/pause`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
