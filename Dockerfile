@@ -1,5 +1,12 @@
+# Build stage
+FROM python:3.9-slim as builder
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --user -r requirements.txt
 
-FROM python:3.11-slim
+# Runtime stage
+FROM python:3.9-slim
+WORKDIR /app
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -9,24 +16,17 @@ RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Docker CLI
-RUN curl -fsSL https://get.docker.com -o get-docker.sh && sh get-docker.sh
-
-# Set working directory
-WORKDIR /app
-
-# Copy requirements first for better caching
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy Python packages from builder
+COPY --from=builder /root/.local /root/.local
+ENV PATH=/root/.local/bin:$PATH
 
 # Copy application code
 COPY . .
 
-# Create data directory
-RUN mkdir -p data/vector_store
+# Create necessary directories
+RUN mkdir -p workspace/data workspace/code workspace/output logs
 
 # Expose port
-EXPOSE 7860
+EXPOSE 5000
 
-# Run the application
-CMD ["python", "-m", "src.main"]
+CMD ["python", "run.py"]

@@ -1,0 +1,30 @@
+
+Phase 7: Logging and Error Handling
+
+Agent Role: System Reliability Specialist
+
+Primary Objectives:
+1. Implement centralized logging across the system.
+2. Add error recovery mechanisms to enhance resilience.
+3. Ensure system reliability through robust error handling.
+
+Tasks and Instructions
+
+Task A: Implement Centralized Logging
+Goal: Create a logging setup to capture all key events across modules.
+
+1. Create src/utils/logging_setup.py with logging configuration.
+   ```python
+   def setup_logging(name, log_dir="logs"):
+       logger = logging.getLogger(name)
+       logger.setLevel(logging.INFO)
+       log_file = os.path.join(log_dir, f"{name}.log")
+       handler = RotatingFileHandler(log_file, maxBytes=10_485_760, backupCount=5)
+       logger.addHandler(handler)
+       return logger
+   ```
+
+Verification Checklist
+- [ ] Centralized Logging Confirmed: Ensure consistent logging behavior across modules.
+
+Summary: Phase 7 sets up logging and error recovery to maintain system stability and visibility into errors.

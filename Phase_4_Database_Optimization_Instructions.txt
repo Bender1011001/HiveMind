@@ -1,0 +1,52 @@
+
+Phase 4: Database Optimization
+
+Agent Role: Database Performance Specialist
+
+Primary Objectives:
+1. Optimize database operations for efficiency and speed.
+2. Implement proper connection handling.
+3. Introduce a caching layer to reduce query load.
+
+Tasks and Instructions
+
+Task A: Enhance MongoStore Implementation
+Goal: Improve MongoDB query efficiency and reliability.
+
+1. Update src/memory/mongo_store.py:
+   - Add connection pooling and increase maxPoolSize for better performance.
+   - Setup compound indexes to optimize common queries.
+
+2. Example of Indexing and Caching:
+   ```python
+   def retrieve_memories(self, agent_id, memory_type=None, limit=100, skip=0):
+       # Check cache before querying
+       cached_result = self.cache.get(f"{agent_id}:{memory_type}:{limit}:{skip}")
+       if cached_result:
+           return cached_result
+       # Query MongoDB with index hints
+   ```
+
+Task B: Implement Caching System
+Goal: Add in-memory caching to reduce repeated database queries.
+
+1. Create a caching utility (`src/utils/cache.py`) to store query results.
+   ```python
+   class CacheEntry:
+       def __init__(self, value, ttl_minutes):
+           self.value = value
+           self.timestamp = datetime.now()
+           self.ttl = timedelta(minutes=ttl_minutes)
+       def is_valid(self):
+           return datetime.now() - self.timestamp < self.ttl
+
+   class Cache:
+       def get(self, key): pass  # Check cache validity
+       def set(self, key, value, ttl=None): pass  # Add cache entries
+   ```
+
+Verification Checklist
+- [ ] MongoStore Optimizations Complete: Confirm indexes and connection handling improvements.
+- [ ] Caching System Implemented: Validate cache retrieval and expiration functionality.
+
+Summary: Phase 4 enhances database performance by introducing caching and optimizing MongoDB interactions.

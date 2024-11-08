@@ -1,23 +1,24 @@
-
 version: '3.8'
-
 services:
-  app:
+  hivemind:
     build: .
     ports:
-      - "7860:7860"
-    volumes:
-      - ./data:/app/data
-      - /var/run/docker.sock:/var/run/docker.sock
+      - "5000:5000"
     environment:
-      - MONGODB_URI=mongodb://mongodb:27017
+      - MONGODB_URI=mongodb://mongo:27017/
       - RABBITMQ_HOST=rabbitmq
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - MODEL_NAME=${MODEL_NAME:-anthropic/claude-3-opus}
+      - TEMPERATURE=${TEMPERATURE:-0.7}
+      - MAX_TOKENS=${MAX_TOKENS:-2048}
+    volumes:
+      - ./workspace:/app/workspace
+      - ./logs:/app/logs
     depends_on:
-      - mongodb
+      - mongo
       - rabbitmq
 
-  mongodb:
+  mongo:
     image: mongo:latest
     ports:
       - "27017:27017"
@@ -25,7 +26,7 @@ services:
       - mongodb_data:/data/db
 
   rabbitmq:
-    image: rabbitmq:3-management
+    image: rabbitmq:management
     ports:
       - "5672:5672"
       - "15672:15672"

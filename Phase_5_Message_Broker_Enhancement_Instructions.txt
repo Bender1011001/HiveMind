@@ -1,0 +1,43 @@
+
+Phase 5: Message Broker Enhancement
+
+Agent Role: Message Queue System Specialist
+
+Primary Objectives:
+1. Improve reliability and efficiency of message handling.
+2. Implement error recovery for connection issues.
+3. Track messages to ensure successful delivery.
+
+Tasks and Instructions
+
+Task A: Enhance Message Broker
+Goal: Increase resilience with retry logic and delivery confirmation.
+
+1. Update src/communication/broker.py to include retry logic with `AMQPConnectionError` handling.
+   ```python
+   def _connect_with_retry(self):
+       for attempt in range(self.retry_count):
+           try:
+               self._connect()
+               return
+           except AMQPConnectionError:
+               if attempt == self.retry_count - 1:
+                   raise ConnectionError("Failed to connect after retries")
+   ```
+
+2. Add `send_message_with_confirmation` for delivery tracking.
+   ```python
+   def send_message_with_confirmation(self, message):
+       try:
+           self.channel.confirm_delivery()
+           self.channel.basic_publish(..., mandatory=True)
+           return True
+       except Exception as e:
+           return False
+   ```
+
+Verification Checklist
+- [ ] Retry Logic Verified: Test connection recovery functionality.
+- [ ] Message Confirmation Implemented: Confirm messages reach their target.
+
+Summary: Phase 5 focuses on improving message reliability, adding retries, and tracking message delivery.

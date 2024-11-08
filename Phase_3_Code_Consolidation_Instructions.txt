@@ -1,0 +1,73 @@
+
+Phase 3: Code Consolidation
+
+Agent Role: Code Organization and Cleanup Specialist
+
+Primary Objectives:
+1. Remove duplicate code and files to reduce redundancy.
+2. Consolidate related functionality for improved organization.
+3. Implement a clear module structure to enhance maintainability.
+
+Tasks and Instructions
+
+Task A: Remove Duplicate Files
+Goal: Eliminate unnecessary duplicates to streamline the codebase.
+
+1. Delete the following duplicate files:
+   - src/memory/mongodb_store.py (duplicate of mongo_store.py)
+   - launch_web.bat (consolidate with install.bat)
+   - src/context/shared_context.py (merge into context_manager.py)
+
+Task B: Implement New Directory Structure
+Goal: Organize code by functionality to improve navigation and modularity.
+
+1. Restructure directories as follows:
+   ```
+   src/
+   ├── api/                 # API endpoints
+   │   ├── __init__.py
+   │   └── routes.py
+   ├── core/               # Core business logic
+   │   ├── agents/         # Former roles directory
+   │   ├── messaging/      # Former communication directory
+   │   └── storage/        # Former memory directory
+   ├── utils/              # Utilities and helpers
+   └── web/               # Web interface
+   ```
+
+Task C: File Consolidation Tasks
+Goal: Merge related functionalities into cohesive modules.
+
+1. Merge UI Components:
+   - File: src/ui/components/task_interface.py
+   ```python
+   """Combined task management interface."""
+   from typing import Dict
+
+   class TaskInterface:
+       def __init__(self):
+           self.simple_mode = SimpleMode()
+           self.task_manager = TaskManager()
+
+       def handle_task(self, task: Dict):
+           if self.simple_mode.is_active:
+               return self.simple_mode.process_task(task)
+           return self.task_manager.process_task(task)
+   ```
+
+2. Consolidate API Monitoring:
+   - Add monitoring in src/web/web_app.py to track requests.
+   ```python
+   class APIMonitor:
+       """API monitoring functionality."""
+       
+       def log_request(self, request):
+           self.requests.append({'method': request.method, 'path': request.path, 'status': request.status_code})
+   ```
+
+Verification Checklist
+- [ ] Duplicate Files Removed: Verify the specified files are deleted.
+- [ ] Directory Structure Updated: Confirm new organization in `src/`.
+- [ ] Code Consolidation Verified: Ensure consolidated files function as expected.
+
+Summary: Your goal in Phase 3 is to organize and consolidate the codebase for improved maintainability and efficiency.

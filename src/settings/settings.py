@@ -2,6 +2,7 @@
 
 import os
 import json
+import logging
 from dataclasses import dataclass, asdict
 from typing import Optional, List
 from dotenv import load_dotenv
@@ -47,12 +48,45 @@ class Settings:
     shared_output_dir: str = os.path.join(base_dir, os.getenv("SHARED_OUTPUT_DIR", "workspace/output"))
     
     def __post_init__(self):
-        """Create necessary directories after initialization."""
+        """Enhanced initialization with validation."""
+        self._validate_environment()
+        self._setup_directories()
+        self._initialize_logging()
+        self._load_model_configs()
+
+    def _validate_environment(self):
+        """Validate critical environment variables."""
+        required_vars = [
+            'OPENROUTER_API_KEY',
+            'MONGODB_URI',
+            'RABBITMQ_HOST'
+        ]
+        for var in required_vars:
+            if not os.getenv(var):
+                print(f"Warning: {var} not set. Some features may be limited.")
+
+    def _setup_directories(self):
+        """Create necessary directories."""
         os.makedirs(self.shared_data_dir, exist_ok=True)
         os.makedirs(self.shared_code_dir, exist_ok=True)
         os.makedirs(self.shared_output_dir, exist_ok=True)
+
+    def _initialize_logging(self):
+        """Initialize logging configuration."""
+        log_dir = os.path.join(self.base_dir, "logs")
+        os.makedirs(log_dir, exist_ok=True)
         
-        # Initialize default available models if none provided
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            handlers=[
+                logging.FileHandler(os.path.join(log_dir, 'hivemind.log')),
+                logging.StreamHandler()
+            ]
+        )
+
+    def _load_model_configs(self):
+        """Initialize default available models if none provided."""
         if self.available_models is None:
             self.available_models = [
                 ModelConfig(
