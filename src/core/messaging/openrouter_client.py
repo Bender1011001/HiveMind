@@ -6,8 +6,8 @@ import time
 import requests
 from datetime import datetime
 from typing import Dict, Any, Optional, List
-from ..settings.settings import settings
-from ..utils.event_bus import EventBus
+from ..settings.config import settings
+from ...utils.event_bus import EventBus
 from ...utils.logging_setup import setup_logging
 
 # Set up centralized logging

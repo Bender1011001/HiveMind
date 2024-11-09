@@ -2,9 +2,11 @@ from typing import Dict, List, Optional, Any, Tuple
 from pymongo import MongoClient, DESCENDING, IndexModel, UpdateOne
 from pymongo.errors import ConnectionFailure, OperationFailure, ServerSelectionTimeoutError
 from datetime import datetime, timedelta
+import time
 from src.utils.cache import Cache
 from ...utils.logging_setup import setup_logging
 
+# Rest of the file remains unchanged
 # Set up centralized logging
 logger = setup_logging(__name__)
 

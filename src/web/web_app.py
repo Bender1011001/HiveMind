@@ -16,15 +16,16 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.append(str(project_root))
 
 from src.utils.event_bus import EventBus
-from src.communication.broker import MessageBroker
-from src.memory.mongo_store import MongoMemoryStore
-from src.settings.settings import settings
-from src.communication.message import Message, MessageType
-from src.roles.master_agent import MasterAgent
-from src.roles.role_manager import RoleManager
-from src.roles.capability import CapabilityRegister
+from src.core.messaging.broker import MessageBroker
+from src.core.storage.mongo_store import MongoMemoryStore
+from src.core.settings.settings import settings
+from src.core.messaging.message import Message, MessageType
+from src.core.agents.master_agent import MasterAgent
+from src.core.agents.role_manager import RoleManager
+from src.core.agents.capability import CapabilityRegister
 from src.utils.logging_setup import setup_logging
 
+# Rest of the file remains unchanged
 # Set up centralized logging
 logger = setup_logging(__name__)
 

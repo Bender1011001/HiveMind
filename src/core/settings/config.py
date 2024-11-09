@@ -89,7 +89,7 @@ class Settings:
             # Override with environment variables if present
             logger.debug("Checking environment variables")
             env_mapping = {
-                'OPENAI_API_KEY': 'api_key',
+                'OPENROUTER_API_KEY': 'api_key',  # Changed from OPENAI_API_KEY to OPENROUTER_API_KEY
                 'MODEL_NAME': 'model_name',
                 'TEMPERATURE': 'temperature',
                 'MAX_TOKENS': 'max_tokens',
